@@ -164,7 +164,7 @@ func (logger *Logger) logPlain(event *Event) {
 		sb.WriteString(event.Err.Error())
 	}
 	sb.WriteByte('\n')
-	fmt.Print(sb.String())
+	_, _ = fmt.Fprintf(logger.out, sb.String())
 }
 
 func (logger *Logger) logJson(event *Event) {
@@ -186,7 +186,7 @@ func (logger *Logger) logJson(event *Event) {
 		sb.WriteString("\"")
 	}
 	sb.WriteString("}\n")
-	fmt.Print(sb.String())
+	_, _ = fmt.Fprintf(logger.out, sb.String())
 }
 
 func createEvent(level Level, msg string, err error) *Event {
