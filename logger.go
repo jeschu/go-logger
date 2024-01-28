@@ -73,11 +73,21 @@ const (
 var goRoutineNames = make(map[int]string)
 var goRoutineNamesMutex = sync.RWMutex{}
 
-func SetGoroutineName(name string) {
+func SetGoroutineName(name string) func() {
+	id := goroutineId()
 	goRoutineNamesMutex.Lock()
-	goRoutineNames[goroutineId()] = name
+	goRoutineNames[id] = name
+	goRoutineNamesMutex.Unlock()
+	return func() {
+		RemoveGoroutineName(id)
+	}
+}
+func RemoveGoroutineName(id int) {
+	goRoutineNamesMutex.Lock()
+	delete(goRoutineNames, id)
 	goRoutineNamesMutex.Unlock()
 }
+
 func goroutineName(id int) string {
 	goRoutineNamesMutex.RLock()
 	name, ok := goRoutineNames[id]
@@ -90,11 +100,14 @@ func goroutineName(id int) string {
 }
 
 type Logger struct {
-	out          io.Writer
-	level        Level
-	format       Format
-	colorized    bool
-	panicOnFatal bool
+	out                    io.Writer
+	name                   string
+	level                  Level
+	format                 Format
+	colorized              bool
+	panicOnFatal           bool
+	maxNameLength          int
+	maxGoroutineNameLength int
 }
 
 type Event struct {
@@ -105,13 +118,16 @@ type Event struct {
 	Err         error
 }
 
-func NewLogger() *Logger {
+func NewLogger(name string) *Logger {
 	return &Logger{
-		out:          os.Stderr,
-		level:        WARN,
-		format:       PLAIN,
-		colorized:    false,
-		panicOnFatal: false,
+		out:                    os.Stderr,
+		level:                  WARN,
+		name:                   name,
+		format:                 PLAIN,
+		colorized:              false,
+		panicOnFatal:           false,
+		maxNameLength:          10,
+		maxGoroutineNameLength: 10,
 	}
 }
 
@@ -135,6 +151,14 @@ func (logger *Logger) PanicOnFatal(panicOnFatal bool) *Logger {
 	logger.panicOnFatal = panicOnFatal
 	return logger
 }
+func (logger *Logger) MaxNameLength(length int) *Logger {
+	logger.maxNameLength = length
+	return logger
+}
+func (logger *Logger) MaxGoroutineNameLength(length int) *Logger {
+	logger.maxGoroutineNameLength = length
+	return logger
+}
 
 func (logger *Logger) log(event *Event) {
 	if event.Level >= logger.level {
@@ -153,11 +177,23 @@ func (logger *Logger) log(event *Event) {
 func (logger *Logger) logPlain(event *Event) {
 	sb := strings.Builder{}
 	sb.WriteString(event.Timestamp.Format(time.RFC3339))
-	sb.WriteByte(' ')
+	sb.WriteString(" -")
 	sb.WriteString(event.Level.Short())
-	sb.WriteString(" [")
-	sb.WriteString(event.GoroutineId)
-	sb.WriteString("] ")
+	sb.WriteString("- [")
+	name := logger.name
+	maxNameLength := logger.maxNameLength
+	if maxNameLength > 0 {
+		name = stringToLength(name, maxNameLength)
+	}
+	sb.WriteString(name)
+	sb.WriteString("] (")
+	goId := event.GoroutineId
+	maxGoroutineNameLength := logger.maxGoroutineNameLength
+	if maxGoroutineNameLength > 0 {
+		goId = stringToLength(goId, maxGoroutineNameLength)
+	}
+	sb.WriteString(goId)
+	sb.WriteString(") ")
 	sb.WriteString(event.Message)
 	if event.Err != nil {
 		sb.WriteString(": ")
@@ -167,10 +203,22 @@ func (logger *Logger) logPlain(event *Event) {
 	_, _ = fmt.Fprintf(logger.out, sb.String())
 }
 
+func stringToLength(str string, length int) string {
+	s := str
+	if len(s) > length {
+		s = s[:length-3] + "..."
+	} else if len(s) < length {
+		s = s + strings.Repeat(" ", length-len(s))
+	}
+	return s
+}
+
 func (logger *Logger) logJson(event *Event) {
 	sb := strings.Builder{}
 	sb.WriteString("{\"timestamo\":\"")
 	sb.WriteString(event.Timestamp.Format(time.RFC3339))
+	sb.WriteString("\",\"logger\":\"")
+	sb.WriteString(logger.name)
 	sb.WriteString("\",\"level\":\"")
 	sb.WriteString(event.Level.Short())
 	sb.WriteString("\",\"goroutineId\":\"")
