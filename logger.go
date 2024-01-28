@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -70,6 +71,23 @@ const (
 )
 
 var goRoutineNames = make(map[int]string)
+var goRoutineNamesMutex = sync.RWMutex{}
+
+func SetGoroutineName(name string) {
+	goRoutineNamesMutex.Lock()
+	goRoutineNames[goroutineId()] = name
+	goRoutineNamesMutex.Unlock()
+}
+func goroutineName(id int) string {
+	goRoutineNamesMutex.RLock()
+	name, ok := goRoutineNames[id]
+	goRoutineNamesMutex.RUnlock()
+	if ok {
+		return name
+	} else {
+		return strconv.Itoa(id)
+	}
+}
 
 type Logger struct {
 	out          io.Writer
@@ -117,8 +135,6 @@ func (logger *Logger) PanicOnFatal(panicOnFatal bool) *Logger {
 	logger.panicOnFatal = panicOnFatal
 	return logger
 }
-
-func SetGoroutineName(name string) { goRoutineNames[goroutineId()] = name }
 
 func (logger *Logger) log(event *Event) {
 	if event.Level >= logger.level {
@@ -197,15 +213,6 @@ func goroutineId() int {
 		return -1
 	}
 	return id
-}
-
-func goroutineName(id int) string {
-	name, ok := goRoutineNames[id]
-	if ok {
-		return name
-	} else {
-		return strconv.Itoa(id)
-	}
 }
 
 func (logger *Logger) Trace(msg string)                  { logger.TraceErr(nil, msg) }
