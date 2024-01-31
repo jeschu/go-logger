@@ -148,41 +148,90 @@ func (logger *Logger) MaxGoroutineNameLength(length int) *Logger {
 	return logger
 }
 
-func (logger *Logger) Trace(msg string)                  { logger.TraceErr(nil, msg) }
-func (logger *Logger) Debug(msg string)                  { logger.DebugErr(nil, msg) }
-func (logger *Logger) Info(msg string)                   { logger.InfoErr(nil, msg) }
-func (logger *Logger) Warn(msg string)                   { logger.WarnErr(nil, msg) }
-func (logger *Logger) Error(msg string)                  { logger.ErrorErr(nil, msg) }
-func (logger *Logger) Fatal(msg string)                  { logger.FatalErr(nil, msg) }
-func (logger *Logger) TraceErr(err error, msg string)    { logger.log(createEvent(TRACE, msg, err)) }
-func (logger *Logger) DebugErr(err error, msg string)    { logger.log(createEvent(DEBUG, msg, err)) }
-func (logger *Logger) InfoErr(err error, msg string)     { logger.log(createEvent(INFO, msg, err)) }
-func (logger *Logger) WarnErr(err error, msg string)     { logger.log(createEvent(WARN, msg, err)) }
-func (logger *Logger) ErrorErr(err error, msg string)    { logger.log(createEvent(ERROR, msg, err)) }
-func (logger *Logger) FatalErr(err error, msg string)    { logger.log(createEvent(FATAL, msg, err)) }
-func (logger *Logger) Tracef(format string, args ...any) { logger.TraceErrf(nil, format, args...) }
-func (logger *Logger) Debugf(format string, args ...any) { logger.DebugErrf(nil, format, args...) }
-func (logger *Logger) Infof(format string, args ...any)  { logger.InfoErrf(nil, format, args...) }
-func (logger *Logger) Warnf(format string, args ...any)  { logger.WarnErrf(nil, format, args...) }
-func (logger *Logger) Errorf(format string, args ...any) { logger.ErrorErrf(nil, format, args...) }
-func (logger *Logger) Fatalf(format string, args ...any) { logger.FatalErrf(nil, format, args...) }
+func (logger *Logger) Trace(msg string) { logger.log(createEvent(TRACE, msg, nil)) }
+func (logger *Logger) Debug(msg string) { logger.log(createEvent(DEBUG, msg, nil)) }
+func (logger *Logger) Info(msg string)  { logger.log(createEvent(INFO, msg, nil)) }
+func (logger *Logger) Warn(msg string)  { logger.log(createEvent(WARN, msg, nil)) }
+func (logger *Logger) Error(msg string) { logger.log(createEvent(ERROR, msg, nil)) }
+func (logger *Logger) Fatal(msg string) { logger.log(createEvent(FATAL, msg, nil)) }
+func (logger *Logger) Tracef(format string, args ...any) {
+	logger.log(createEvent(TRACE, fmt.Sprintf(format, args...), nil))
+}
+func (logger *Logger) Debugf(format string, args ...any) {
+	logger.log(createEvent(DEBUG, fmt.Sprintf(format, args...), nil))
+}
+func (logger *Logger) Infof(format string, args ...any) {
+	logger.log(createEvent(INFO, fmt.Sprintf(format, args...), nil))
+}
+func (logger *Logger) Warnf(format string, args ...any) {
+	logger.log(createEvent(WARN, fmt.Sprintf(format, args...), nil))
+}
+func (logger *Logger) Errorf(format string, args ...any) {
+	logger.log(createEvent(ERROR, fmt.Sprintf(format, args...), nil))
+}
+func (logger *Logger) Fatalf(format string, args ...any) {
+	logger.log(createEvent(FATAL, fmt.Sprintf(format, args...), nil))
+}
+
+func (logger *Logger) TraceErr(err error, msg string) {
+	if err != nil {
+		logger.log(createEvent(TRACE, msg, err))
+	}
+}
+func (logger *Logger) DebugErr(err error, msg string) {
+	if err != nil {
+		logger.log(createEvent(DEBUG, msg, err))
+	}
+}
+func (logger *Logger) InfoErr(err error, msg string) {
+	if err != nil {
+		logger.log(createEvent(INFO, msg, err))
+	}
+}
+func (logger *Logger) WarnErr(err error, msg string) {
+	if err != nil {
+		logger.log(createEvent(WARN, msg, err))
+	}
+}
+func (logger *Logger) ErrorErr(err error, msg string) {
+	if err != nil {
+		logger.log(createEvent(ERROR, msg, err))
+	}
+}
+func (logger *Logger) FatalErr(err error, msg string) {
+	if err != nil {
+		logger.log(createEvent(FATAL, msg, err))
+	}
+}
 func (logger *Logger) TraceErrf(err error, format string, args ...any) {
-	logger.log(createEvent(TRACE, fmt.Sprintf(format, args...), err))
+	if err != nil {
+		logger.log(createEvent(TRACE, fmt.Sprintf(format, args...), err))
+	}
 }
 func (logger *Logger) DebugErrf(err error, format string, args ...any) {
-	logger.log(createEvent(DEBUG, fmt.Sprintf(format, args...), err))
+	if err != nil {
+		logger.log(createEvent(DEBUG, fmt.Sprintf(format, args...), err))
+	}
 }
 func (logger *Logger) InfoErrf(err error, format string, args ...any) {
-	logger.log(createEvent(INFO, fmt.Sprintf(format, args...), err))
+	if err != nil {
+		logger.log(createEvent(INFO, fmt.Sprintf(format, args...), err))
+	}
 }
 func (logger *Logger) WarnErrf(err error, format string, args ...any) {
-	logger.log(createEvent(WARN, fmt.Sprintf(format, args...), err))
+	if err != nil {
+		logger.log(createEvent(WARN, fmt.Sprintf(format, args...), err))
+	}
 }
 func (logger *Logger) ErrorErrf(err error, format string, args ...any) {
-	logger.log(createEvent(ERROR, fmt.Sprintf(format, args...), err))
+	if err != nil {
+		logger.log(createEvent(ERROR, fmt.Sprintf(format, args...), err))
+	}
 }
 func (logger *Logger) FatalErrf(err error, format string, args ...any) {
-	logger.log(createEvent(FATAL, fmt.Sprintf(format, args...), err))
+	if err != nil {
+		logger.log(createEvent(FATAL, fmt.Sprintf(format, args...), err))
+	}
 }
 func (logger *Logger) IsTrace() bool { return logger.level <= TRACE }
 func (logger *Logger) IsDebug() bool { return logger.level <= DEBUG }
