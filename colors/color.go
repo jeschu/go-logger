@@ -1,0 +1,50 @@
+package colors
+
+type Color string
+
+//goland:noinspection GoUnusedGlobalVariable
+var (
+	END       = Color("\033[0m")
+	BOLD      = Color("\033[1m")
+	ITALIC    = Color("\033[3m")
+	URL       = Color("\033[4m")
+	BLINK     = Color("\033[5m")
+	BLINK2    = Color("\033[6m")
+	SELECTED  = Color("\033[7m")
+	BLACK     = Color("\033[30m")
+	RED       = Color("\033[31m")
+	GREEN     = Color("\033[32m")
+	YELLOW    = Color("\033[33m")
+	BLUE      = Color("\033[34m")
+	VIOLET    = Color("\033[35m")
+	BEIGE     = Color("\033[36m")
+	WHITE     = Color("\033[37m")
+	BLACKBG   = Color("\033[40m")
+	REDBG     = Color("\033[41m")
+	GREENBG   = Color("\033[42m")
+	YELLOWBG  = Color("\033[43m")
+	BLUEBG    = Color("\033[44m")
+	VIOLETBG  = Color("\033[45m")
+	BEIGEBG   = Color("\033[46m")
+	WHITEBG   = Color("\033[47m")
+	GREY      = Color("\033[90m")
+	RED2      = Color("\033[91m")
+	GREEN2    = Color("\033[92m")
+	YELLOW2   = Color("\033[93m")
+	BLUE2     = Color("\033[94m")
+	VIOLET2   = Color("\033[95m")
+	BEIGE2    = Color("\033[96m")
+	WHITE2    = Color("\033[97m")
+	GREYBG    = Color("\033[100m")
+	REDBG2    = Color("\033[101m")
+	GREENBG2  = Color("\033[102m")
+	YELLOWBG2 = Color("\033[103m")
+	BLUEBG2   = Color("\033[104m")
+	VIOLETBG2 = Color("\033[105m")
+	BEIGEBG2  = Color("\033[106m")
+	WHITEBG2  = Color("\033[107m")
+)
+
+func (color Color) String() string {
+	return string(color)
+}
