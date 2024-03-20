@@ -69,6 +69,8 @@ const (
 	JSON
 )
 
+var goRoutineNames = make(map[int]string)
+
 type Logger struct {
 	out          io.Writer
 	level        Level
@@ -79,7 +81,7 @@ type Logger struct {
 
 type Event struct {
 	Timestamp   time.Time
-	GoroutineId int
+	GoroutineId string
 	Level       Level
 	Message     string
 	Err         error
@@ -116,6 +118,8 @@ func (logger *Logger) PanicOnFatal(panicOnFatal bool) *Logger {
 	return logger
 }
 
+func SetGoroutineName(name string) { goRoutineNames[goroutineId()] = name }
+
 func (logger *Logger) log(event *Event) {
 	if event.Level >= logger.level {
 		switch logger.format {
@@ -136,7 +140,7 @@ func (logger *Logger) logPlain(event *Event) {
 	sb.WriteByte(' ')
 	sb.WriteString(event.Level.Short())
 	sb.WriteString(" [")
-	sb.WriteString(strconv.Itoa(event.GoroutineId))
+	sb.WriteString(event.GoroutineId)
 	sb.WriteString("] ")
 	sb.WriteString(event.Message)
 	if event.Err != nil {
@@ -144,7 +148,7 @@ func (logger *Logger) logPlain(event *Event) {
 		sb.WriteString(event.Err.Error())
 	}
 	sb.WriteByte('\n')
-	fmt.Println(sb.String())
+	fmt.Print(sb.String())
 }
 
 func (logger *Logger) logJson(event *Event) {
@@ -153,9 +157,9 @@ func (logger *Logger) logJson(event *Event) {
 	sb.WriteString(event.Timestamp.Format(time.RFC3339))
 	sb.WriteString("\",\"level\":\"")
 	sb.WriteString(event.Level.Short())
-	sb.WriteString("\",\"goroutineId\":")
-	sb.WriteString(strconv.Itoa(event.GoroutineId))
-	sb.WriteString(",\"message\":\"")
+	sb.WriteString("\",\"goroutineId\":\"")
+	sb.WriteString(event.GoroutineId)
+	sb.WriteString("\",\"message\":\"")
 	message, _ := json.Marshal(event.Message)
 	sb.Write(message)
 	sb.WriteString("\"")
@@ -166,7 +170,7 @@ func (logger *Logger) logJson(event *Event) {
 		sb.WriteString("\"")
 	}
 	sb.WriteString("}\n")
-	fmt.Println(sb.String())
+	fmt.Print(sb.String())
 }
 
 func createEvent(level Level, msg string, err error) *Event {
@@ -177,7 +181,7 @@ func createEvent(level Level, msg string, err error) *Event {
 	msg = strings.ReplaceAll(msg, "\n", "\\n")
 	return &Event{
 		Timestamp:   timestamp,
-		GoroutineId: goroutineId(),
+		GoroutineId: goroutineName(goroutineId()),
 		Level:       level,
 		Message:     msg,
 		Err:         err,
@@ -193,6 +197,15 @@ func goroutineId() int {
 		return -1
 	}
 	return id
+}
+
+func goroutineName(id int) string {
+	name, ok := goRoutineNames[id]
+	if ok {
+		return name
+	} else {
+		return strconv.Itoa(id)
+	}
 }
 
 func (logger *Logger) Trace(msg string)                  { logger.TraceErr(nil, msg) }
