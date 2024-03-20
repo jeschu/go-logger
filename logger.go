@@ -3,6 +3,7 @@ package go_logger
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/jeschu/go-logger/colors"
 	"golang.org/x/term"
 	"io"
 	"os"
@@ -77,7 +78,7 @@ type Logger struct {
 	level                  Level
 	format                 Format
 	colorizedSet           bool
-	colors                 colors
+	colors                 cls
 	panicOnFatal           bool
 	maxNameLength          int
 	maxGoroutineNameLength int
@@ -91,6 +92,7 @@ type Event struct {
 	Err         error
 }
 
+//goland:noinspection GoUnusedExportedFunction
 func NewLogger(name string) *Logger {
 	return &Logger{
 		out:                    os.Stderr,
@@ -98,7 +100,7 @@ func NewLogger(name string) *Logger {
 		name:                   name,
 		format:                 PLAIN,
 		colorizedSet:           false,
-		colors:                 colorsOn,
+		colors:                 clsOn,
 		panicOnFatal:           false,
 		maxNameLength:          10,
 		maxGoroutineNameLength: 10,
@@ -110,9 +112,9 @@ func (logger *Logger) Out(out io.Writer) *Logger {
 	if !logger.colorizedSet {
 		if f, ok := out.(*os.File); ok {
 			if term.IsTerminal(int(f.Fd())) {
-				logger.colors = colorsOn
+				logger.colors = clsOn
 			} else {
-				logger.colors = colorsOff
+				logger.colors = clsOff
 			}
 		}
 	}
@@ -129,9 +131,9 @@ func (logger *Logger) Level(level Level) *Logger {
 func (logger *Logger) Colorized(colorized bool) *Logger {
 	logger.colorizedSet = true
 	if colorized {
-		logger.colors = colorsOn
+		logger.colors = clsOn
 	} else {
-		logger.colors = colorsOff
+		logger.colors = clsOff
 	}
 	return logger
 }
@@ -240,6 +242,7 @@ func (logger *Logger) IsWarn() bool  { return logger.level <= WARN }
 func (logger *Logger) IsError() bool { return logger.level <= ERROR }
 func (logger *Logger) IsFatal() bool { return logger.level <= FATAL }
 
+//goland:noinspection GoUnusedExportedFunction
 func SetGoroutineName(name string) func() {
 	id := goroutineId()
 	goRoutineNamesMutex.Lock()
@@ -285,13 +288,13 @@ func (logger *Logger) log(event *Event) {
 
 func (logger *Logger) logPlain(event *Event) {
 	sb := strings.Builder{}
-	sb.WriteString(logger.colors.cGREY)
+	sb.WriteString(logger.colors.Timestamp.String())
 	sb.WriteString(event.Timestamp.Format(time.RFC3339))
 	sb.WriteString(levelColored(logger, event.Level))
 	sb.WriteString(" -")
 	sb.WriteString(event.Level.Short())
 	sb.WriteString("-")
-	sb.WriteString(logger.colors.cGREY)
+	sb.WriteString(logger.colors.Logger.String())
 	sb.WriteString(" [")
 	name := logger.name
 	maxNameLength := logger.maxNameLength
@@ -299,7 +302,9 @@ func (logger *Logger) logPlain(event *Event) {
 		name = stringToLength(name, maxNameLength)
 	}
 	sb.WriteString(name)
-	sb.WriteString("] (")
+	sb.WriteString("] ")
+	sb.WriteString(logger.colors.GoRoutine.String())
+	sb.WriteString("(")
 	goId := event.GoroutineId
 	maxGoroutineNameLength := logger.maxGoroutineNameLength
 	if maxGoroutineNameLength > 0 {
@@ -307,13 +312,13 @@ func (logger *Logger) logPlain(event *Event) {
 	}
 	sb.WriteString(goId)
 	sb.WriteString(") ")
-	sb.WriteString(logger.colors.cWHITE)
+	sb.WriteString(messageColored(logger, event.Level))
 	sb.WriteString(event.Message)
 	if event.Err != nil {
 		sb.WriteString(": ")
 		sb.WriteString(event.Err.Error())
 	}
-	sb.WriteString(logger.colors.cEND)
+	sb.WriteString(colors.END.String())
 	sb.WriteByte('\n')
 	_, _ = fmt.Fprintf(logger.out, sb.String())
 }
@@ -321,19 +326,49 @@ func (logger *Logger) logPlain(event *Event) {
 func levelColored(logger *Logger, level Level) string {
 	switch level {
 	case TRACE:
-		return logger.colors.cBLUE
+		return logger.colors.Trace.String()
 	case DEBUG:
-		return logger.colors.cBLUE2
+		return logger.colors.Debug.String()
 	case INFO:
-		return logger.colors.cYELLOW
+		return logger.colors.Info.String()
 	case WARN:
-		return logger.colors.cYELLOW2
+		return logger.colors.Warn.String()
 	case ERROR:
-		return logger.colors.cRED
+		return logger.colors.Error.String()
 	case FATAL:
-		return logger.colors.cRED2
+		return logger.colors.Fatal.String()
 	default:
-		return ""
+		return logger.colors.Default.String()
+	}
+}
+func messageColored(logger *Logger, level Level) string {
+	switch level {
+	case TRACE:
+		return logger.colors.Message.String()
+	case DEBUG:
+		return logger.colors.Message.String()
+	case INFO:
+		return logger.colors.Message.String()
+	case WARN:
+		if logger.colors.MessageLevel {
+			return logger.colors.Warn.String()
+		} else {
+			return logger.colors.Message.String()
+		}
+	case ERROR:
+		if logger.colors.MessageLevel {
+			return logger.colors.Error.String()
+		} else {
+			return logger.colors.Message.String()
+		}
+	case FATAL:
+		if logger.colors.MessageLevel {
+			return logger.colors.Fatal.String()
+		} else {
+			return logger.colors.Message.String()
+		}
+	default:
+		return logger.colors.Default.String()
 	}
 }
 
@@ -397,127 +432,37 @@ func goroutineId() int {
 	return id
 }
 
-type colors struct {
-	cEND       string
-	cBOLD      string
-	cITALIC    string
-	cURL       string
-	cBLINK     string
-	cBLINK2    string
-	cSELECTED  string
-	cBLACK     string
-	cRED       string
-	cGREEN     string
-	cYELLOW    string
-	cBLUE      string
-	cVIOLET    string
-	cBEIGE     string
-	cWHITE     string
-	cBLACKBG   string
-	cREDBG     string
-	cGREENBG   string
-	cYELLOWBG  string
-	cBLUEBG    string
-	cVIOLETBG  string
-	cBEIGEBG   string
-	cWHITEBG   string
-	cGREY      string
-	cRED2      string
-	cGREEN2    string
-	cYELLOW2   string
-	cBLUE2     string
-	cVIOLET2   string
-	cBEIGE2    string
-	cWHITE2    string
-	cGREYBG    string
-	cREDBG2    string
-	cGREENBG2  string
-	cYELLOWBG2 string
-	cBLUEBG2   string
-	cVIOLETBG2 string
-	cBEIGEBG2  string
-	cWHITEBG2  string
+type cls struct {
+	Default      colors.Color
+	Timestamp    colors.Color
+	Trace        colors.Color
+	Debug        colors.Color
+	Info         colors.Color
+	Warn         colors.Color
+	Error        colors.Color
+	Fatal        colors.Color
+	Logger       colors.Color
+	GoRoutine    colors.Color
+	Message      colors.Color
+	MessageLevel bool
 }
 
-var colorsOff = colors{
-	cEND:       "",
-	cBOLD:      "",
-	cITALIC:    "",
-	cURL:       "",
-	cBLINK:     "",
-	cBLINK2:    "",
-	cSELECTED:  "",
-	cBLACK:     "",
-	cRED:       "",
-	cGREEN:     "",
-	cYELLOW:    "",
-	cBLUE:      "",
-	cVIOLET:    "",
-	cBEIGE:     "",
-	cWHITE:     "",
-	cBLACKBG:   "",
-	cREDBG:     "",
-	cGREENBG:   "",
-	cYELLOWBG:  "",
-	cBLUEBG:    "",
-	cVIOLETBG:  "",
-	cBEIGEBG:   "",
-	cWHITEBG:   "",
-	cGREY:      "",
-	cRED2:      "",
-	cGREEN2:    "",
-	cYELLOW2:   "",
-	cBLUE2:     "",
-	cVIOLET2:   "",
-	cBEIGE2:    "",
-	cWHITE2:    "",
-	cGREYBG:    "",
-	cREDBG2:    "",
-	cGREENBG2:  "",
-	cYELLOWBG2: "",
-	cBLUEBG2:   "",
-	cVIOLETBG2: "",
-	cBEIGEBG2:  "",
-	cWHITEBG2:  "",
+var clsOn = cls{
+	Default:      colors.GREY,
+	Timestamp:    colors.BEIGE,
+	Trace:        colors.BLUE,
+	Debug:        colors.BLUE2,
+	Info:         colors.YELLOW,
+	Warn:         colors.YELLOW2,
+	Error:        colors.RED,
+	Fatal:        colors.RED2,
+	Logger:       colors.VIOLET,
+	GoRoutine:    colors.VIOLET2,
+	Message:      colors.WHITE,
+	MessageLevel: true,
 }
-var colorsOn = colors{
-	cEND:       "\033[0m",
-	cBOLD:      "\033[1m",
-	cITALIC:    "\033[3m",
-	cURL:       "\033[4m",
-	cBLINK:     "\033[5m",
-	cBLINK2:    "\033[6m",
-	cSELECTED:  "\033[7m",
-	cBLACK:     "\033[30m",
-	cRED:       "\033[31m",
-	cGREEN:     "\033[32m",
-	cYELLOW:    "\033[33m",
-	cBLUE:      "\033[34m",
-	cVIOLET:    "\033[35m",
-	cBEIGE:     "\033[36m",
-	cWHITE:     "\033[37m",
-	cBLACKBG:   "\033[40m",
-	cREDBG:     "\033[41m",
-	cGREENBG:   "\033[42m",
-	cYELLOWBG:  "\033[43m",
-	cBLUEBG:    "\033[44m",
-	cVIOLETBG:  "\033[45m",
-	cBEIGEBG:   "\033[46m",
-	cWHITEBG:   "\033[47m",
-	cGREY:      "\033[90m",
-	cRED2:      "\033[91m",
-	cGREEN2:    "\033[92m",
-	cYELLOW2:   "\033[93m",
-	cBLUE2:     "\033[94m",
-	cVIOLET2:   "\033[95m",
-	cBEIGE2:    "\033[96m",
-	cWHITE2:    "\033[97m",
-	cGREYBG:    "\033[100m",
-	cREDBG2:    "\033[101m",
-	cGREENBG2:  "\033[102m",
-	cYELLOWBG2: "\033[103m",
-	cBLUEBG2:   "\033[104m",
-	cVIOLETBG2: "\033[105m",
-	cBEIGEBG2:  "\033[106m",
-	cWHITEBG2:  "\033[107m",
+
+var clsOff = cls{
+	Default: "", Timestamp: "", Trace: "", Debug: "", Info: "", Warn: "", Error: "", Fatal: "", Logger: "",
+	GoRoutine: "", Message: "", MessageLevel: false,
 }
