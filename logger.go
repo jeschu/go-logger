@@ -171,6 +171,10 @@ func (logger *Logger) logJson(event *Event) {
 
 func createEvent(level Level, msg string, err error) *Event {
 	timestamp := time.Now()
+	if msg[len(msg)-1] == '\n' {
+		msg = msg[:len(msg)-1]
+	}
+	msg = strings.ReplaceAll(msg, "\n", "\\n")
 	return &Event{
 		Timestamp:   timestamp,
 		GoroutineId: goroutineId(),
