@@ -3,6 +3,7 @@ package go_logger
 import (
 	"encoding/json"
 	"fmt"
+	"golang.org/x/term"
 	"io"
 	"os"
 	"runtime"
@@ -70,41 +71,13 @@ const (
 	JSON
 )
 
-var goRoutineNames = make(map[int]string)
-var goRoutineNamesMutex = sync.RWMutex{}
-
-func SetGoroutineName(name string) func() {
-	id := goroutineId()
-	goRoutineNamesMutex.Lock()
-	goRoutineNames[id] = name
-	goRoutineNamesMutex.Unlock()
-	return func() {
-		RemoveGoroutineName(id)
-	}
-}
-func RemoveGoroutineName(id int) {
-	goRoutineNamesMutex.Lock()
-	delete(goRoutineNames, id)
-	goRoutineNamesMutex.Unlock()
-}
-
-func goroutineName(id int) string {
-	goRoutineNamesMutex.RLock()
-	name, ok := goRoutineNames[id]
-	goRoutineNamesMutex.RUnlock()
-	if ok {
-		return name
-	} else {
-		return strconv.Itoa(id)
-	}
-}
-
 type Logger struct {
 	out                    io.Writer
 	name                   string
 	level                  Level
 	format                 Format
-	colorized              bool
+	colorizedSet           bool
+	colors                 colors
 	panicOnFatal           bool
 	maxNameLength          int
 	maxGoroutineNameLength int
@@ -124,7 +97,8 @@ func NewLogger(name string) *Logger {
 		level:                  WARN,
 		name:                   name,
 		format:                 PLAIN,
-		colorized:              false,
+		colorizedSet:           false,
+		colors:                 colorsOn,
 		panicOnFatal:           false,
 		maxNameLength:          10,
 		maxGoroutineNameLength: 10,
@@ -133,6 +107,15 @@ func NewLogger(name string) *Logger {
 
 func (logger *Logger) Out(out io.Writer) *Logger {
 	logger.out = out
+	if !logger.colorizedSet {
+		if f, ok := out.(*os.File); ok {
+			if term.IsTerminal(int(f.Fd())) {
+				logger.colors = colorsOn
+			} else {
+				logger.colors = colorsOff
+			}
+		}
+	}
 	return logger
 }
 func (logger *Logger) Format(format Format) *Logger {
@@ -144,7 +127,12 @@ func (logger *Logger) Level(level Level) *Logger {
 	return logger
 }
 func (logger *Logger) Colorized(colorized bool) *Logger {
-	logger.colorized = colorized
+	logger.colorizedSet = true
+	if colorized {
+		logger.colors = colorsOn
+	} else {
+		logger.colors = colorsOff
+	}
 	return logger
 }
 func (logger *Logger) PanicOnFatal(panicOnFatal bool) *Logger {
@@ -158,6 +146,78 @@ func (logger *Logger) MaxNameLength(length int) *Logger {
 func (logger *Logger) MaxGoroutineNameLength(length int) *Logger {
 	logger.maxGoroutineNameLength = length
 	return logger
+}
+
+func (logger *Logger) Trace(msg string)                  { logger.TraceErr(nil, msg) }
+func (logger *Logger) Debug(msg string)                  { logger.DebugErr(nil, msg) }
+func (logger *Logger) Info(msg string)                   { logger.InfoErr(nil, msg) }
+func (logger *Logger) Warn(msg string)                   { logger.WarnErr(nil, msg) }
+func (logger *Logger) Error(msg string)                  { logger.ErrorErr(nil, msg) }
+func (logger *Logger) Fatal(msg string)                  { logger.FatalErr(nil, msg) }
+func (logger *Logger) TraceErr(err error, msg string)    { logger.log(createEvent(TRACE, msg, err)) }
+func (logger *Logger) DebugErr(err error, msg string)    { logger.log(createEvent(DEBUG, msg, err)) }
+func (logger *Logger) InfoErr(err error, msg string)     { logger.log(createEvent(INFO, msg, err)) }
+func (logger *Logger) WarnErr(err error, msg string)     { logger.log(createEvent(WARN, msg, err)) }
+func (logger *Logger) ErrorErr(err error, msg string)    { logger.log(createEvent(ERROR, msg, err)) }
+func (logger *Logger) FatalErr(err error, msg string)    { logger.log(createEvent(FATAL, msg, err)) }
+func (logger *Logger) Tracef(format string, args ...any) { logger.TraceErrf(nil, format, args...) }
+func (logger *Logger) Debugf(format string, args ...any) { logger.DebugErrf(nil, format, args...) }
+func (logger *Logger) Infof(format string, args ...any)  { logger.InfoErrf(nil, format, args...) }
+func (logger *Logger) Warnf(format string, args ...any)  { logger.WarnErrf(nil, format, args...) }
+func (logger *Logger) Errorf(format string, args ...any) { logger.ErrorErrf(nil, format, args...) }
+func (logger *Logger) Fatalf(format string, args ...any) { logger.FatalErrf(nil, format, args...) }
+func (logger *Logger) TraceErrf(err error, format string, args ...any) {
+	logger.log(createEvent(TRACE, fmt.Sprintf(format, args...), err))
+}
+func (logger *Logger) DebugErrf(err error, format string, args ...any) {
+	logger.log(createEvent(DEBUG, fmt.Sprintf(format, args...), err))
+}
+func (logger *Logger) InfoErrf(err error, format string, args ...any) {
+	logger.log(createEvent(INFO, fmt.Sprintf(format, args...), err))
+}
+func (logger *Logger) WarnErrf(err error, format string, args ...any) {
+	logger.log(createEvent(WARN, fmt.Sprintf(format, args...), err))
+}
+func (logger *Logger) ErrorErrf(err error, format string, args ...any) {
+	logger.log(createEvent(ERROR, fmt.Sprintf(format, args...), err))
+}
+func (logger *Logger) FatalErrf(err error, format string, args ...any) {
+	logger.log(createEvent(FATAL, fmt.Sprintf(format, args...), err))
+}
+func (logger *Logger) IsTrace() bool { return logger.level <= TRACE }
+func (logger *Logger) IsDebug() bool { return logger.level <= DEBUG }
+func (logger *Logger) IsInfo() bool  { return logger.level <= INFO }
+func (logger *Logger) IsWarn() bool  { return logger.level <= WARN }
+func (logger *Logger) IsError() bool { return logger.level <= ERROR }
+func (logger *Logger) IsFatal() bool { return logger.level <= FATAL }
+
+func SetGoroutineName(name string) func() {
+	id := goroutineId()
+	goRoutineNamesMutex.Lock()
+	goRoutineNames[id] = name
+	goRoutineNamesMutex.Unlock()
+	return func() {
+		RemoveGoroutineName(id)
+	}
+}
+func RemoveGoroutineName(id int) {
+	goRoutineNamesMutex.Lock()
+	delete(goRoutineNames, id)
+	goRoutineNamesMutex.Unlock()
+}
+
+var goRoutineNames = make(map[int]string)
+var goRoutineNamesMutex = sync.RWMutex{}
+
+func goroutineName(id int) string {
+	goRoutineNamesMutex.RLock()
+	name, ok := goRoutineNames[id]
+	goRoutineNamesMutex.RUnlock()
+	if ok {
+		return name
+	} else {
+		return strconv.Itoa(id)
+	}
 }
 
 func (logger *Logger) log(event *Event) {
@@ -176,10 +236,14 @@ func (logger *Logger) log(event *Event) {
 
 func (logger *Logger) logPlain(event *Event) {
 	sb := strings.Builder{}
+	sb.WriteString(logger.colors.cGREY)
 	sb.WriteString(event.Timestamp.Format(time.RFC3339))
+	sb.WriteString(levelColored(logger, event.Level))
 	sb.WriteString(" -")
 	sb.WriteString(event.Level.Short())
-	sb.WriteString("- [")
+	sb.WriteString("-")
+	sb.WriteString(logger.colors.cGREY)
+	sb.WriteString(" [")
 	name := logger.name
 	maxNameLength := logger.maxNameLength
 	if maxNameLength > 0 {
@@ -194,13 +258,34 @@ func (logger *Logger) logPlain(event *Event) {
 	}
 	sb.WriteString(goId)
 	sb.WriteString(") ")
+	sb.WriteString(logger.colors.cWHITE)
 	sb.WriteString(event.Message)
 	if event.Err != nil {
 		sb.WriteString(": ")
 		sb.WriteString(event.Err.Error())
 	}
+	sb.WriteString(logger.colors.cEND)
 	sb.WriteByte('\n')
 	_, _ = fmt.Fprintf(logger.out, sb.String())
+}
+
+func levelColored(logger *Logger, level Level) string {
+	switch level {
+	case TRACE:
+		return logger.colors.cBLUE
+	case DEBUG:
+		return logger.colors.cBLUE2
+	case INFO:
+		return logger.colors.cYELLOW
+	case WARN:
+		return logger.colors.cYELLOW2
+	case ERROR:
+		return logger.colors.cRED
+	case FATAL:
+		return logger.colors.cRED2
+	default:
+		return ""
+	}
 }
 
 func stringToLength(str string, length int) string {
@@ -263,45 +348,127 @@ func goroutineId() int {
 	return id
 }
 
-func (logger *Logger) Trace(msg string)                  { logger.TraceErr(nil, msg) }
-func (logger *Logger) Debug(msg string)                  { logger.DebugErr(nil, msg) }
-func (logger *Logger) Info(msg string)                   { logger.InfoErr(nil, msg) }
-func (logger *Logger) Warn(msg string)                   { logger.WarnErr(nil, msg) }
-func (logger *Logger) Error(msg string)                  { logger.ErrorErr(nil, msg) }
-func (logger *Logger) Fatal(msg string)                  { logger.FatalErr(nil, msg) }
-func (logger *Logger) TraceErr(err error, msg string)    { logger.log(createEvent(TRACE, msg, err)) }
-func (logger *Logger) DebugErr(err error, msg string)    { logger.log(createEvent(DEBUG, msg, err)) }
-func (logger *Logger) InfoErr(err error, msg string)     { logger.log(createEvent(INFO, msg, err)) }
-func (logger *Logger) WarnErr(err error, msg string)     { logger.log(createEvent(WARN, msg, err)) }
-func (logger *Logger) ErrorErr(err error, msg string)    { logger.log(createEvent(ERROR, msg, err)) }
-func (logger *Logger) FatalErr(err error, msg string)    { logger.log(createEvent(FATAL, msg, err)) }
-func (logger *Logger) Tracef(format string, args ...any) { logger.TraceErrf(nil, format, args...) }
-func (logger *Logger) Debugf(format string, args ...any) { logger.DebugErrf(nil, format, args...) }
-func (logger *Logger) Infof(format string, args ...any)  { logger.InfoErrf(nil, format, args...) }
-func (logger *Logger) Warnf(format string, args ...any)  { logger.WarnErrf(nil, format, args...) }
-func (logger *Logger) Errorf(format string, args ...any) { logger.ErrorErrf(nil, format, args...) }
-func (logger *Logger) Fatalf(format string, args ...any) { logger.FatalErrf(nil, format, args...) }
-func (logger *Logger) TraceErrf(err error, format string, args ...any) {
-	logger.log(createEvent(TRACE, fmt.Sprintf(format, args...), err))
+type colors struct {
+	cEND       string
+	cBOLD      string
+	cITALIC    string
+	cURL       string
+	cBLINK     string
+	cBLINK2    string
+	cSELECTED  string
+	cBLACK     string
+	cRED       string
+	cGREEN     string
+	cYELLOW    string
+	cBLUE      string
+	cVIOLET    string
+	cBEIGE     string
+	cWHITE     string
+	cBLACKBG   string
+	cREDBG     string
+	cGREENBG   string
+	cYELLOWBG  string
+	cBLUEBG    string
+	cVIOLETBG  string
+	cBEIGEBG   string
+	cWHITEBG   string
+	cGREY      string
+	cRED2      string
+	cGREEN2    string
+	cYELLOW2   string
+	cBLUE2     string
+	cVIOLET2   string
+	cBEIGE2    string
+	cWHITE2    string
+	cGREYBG    string
+	cREDBG2    string
+	cGREENBG2  string
+	cYELLOWBG2 string
+	cBLUEBG2   string
+	cVIOLETBG2 string
+	cBEIGEBG2  string
+	cWHITEBG2  string
 }
-func (logger *Logger) DebugErrf(err error, format string, args ...any) {
-	logger.log(createEvent(DEBUG, fmt.Sprintf(format, args...), err))
+
+var colorsOff = colors{
+	cEND:       "",
+	cBOLD:      "",
+	cITALIC:    "",
+	cURL:       "",
+	cBLINK:     "",
+	cBLINK2:    "",
+	cSELECTED:  "",
+	cBLACK:     "",
+	cRED:       "",
+	cGREEN:     "",
+	cYELLOW:    "",
+	cBLUE:      "",
+	cVIOLET:    "",
+	cBEIGE:     "",
+	cWHITE:     "",
+	cBLACKBG:   "",
+	cREDBG:     "",
+	cGREENBG:   "",
+	cYELLOWBG:  "",
+	cBLUEBG:    "",
+	cVIOLETBG:  "",
+	cBEIGEBG:   "",
+	cWHITEBG:   "",
+	cGREY:      "",
+	cRED2:      "",
+	cGREEN2:    "",
+	cYELLOW2:   "",
+	cBLUE2:     "",
+	cVIOLET2:   "",
+	cBEIGE2:    "",
+	cWHITE2:    "",
+	cGREYBG:    "",
+	cREDBG2:    "",
+	cGREENBG2:  "",
+	cYELLOWBG2: "",
+	cBLUEBG2:   "",
+	cVIOLETBG2: "",
+	cBEIGEBG2:  "",
+	cWHITEBG2:  "",
 }
-func (logger *Logger) InfoErrf(err error, format string, args ...any) {
-	logger.log(createEvent(INFO, fmt.Sprintf(format, args...), err))
+var colorsOn = colors{
+	cEND:       "\\33[0m",
+	cBOLD:      "\\33[1m",
+	cITALIC:    "\\33[3m",
+	cURL:       "\\33[4m",
+	cBLINK:     "\\33[5m",
+	cBLINK2:    "\\33[6m",
+	cSELECTED:  "\\33[7m",
+	cBLACK:     "\\33[30m",
+	cRED:       "\\33[31m",
+	cGREEN:     "\\33[32m",
+	cYELLOW:    "\\33[33m",
+	cBLUE:      "\\33[34m",
+	cVIOLET:    "\\33[35m",
+	cBEIGE:     "\\33[36m",
+	cWHITE:     "\\33[37m",
+	cBLACKBG:   "\\33[40m",
+	cREDBG:     "\\33[41m",
+	cGREENBG:   "\\33[42m",
+	cYELLOWBG:  "\\33[43m",
+	cBLUEBG:    "\\33[44m",
+	cVIOLETBG:  "\\33[45m",
+	cBEIGEBG:   "\\33[46m",
+	cWHITEBG:   "\\33[47m",
+	cGREY:      "\\33[90m",
+	cRED2:      "\\33[91m",
+	cGREEN2:    "\\33[92m",
+	cYELLOW2:   "\\33[93m",
+	cBLUE2:     "\\33[94m",
+	cVIOLET2:   "\\33[95m",
+	cBEIGE2:    "\\33[96m",
+	cWHITE2:    "\\33[97m",
+	cGREYBG:    "\\33[100m",
+	cREDBG2:    "\\33[101m",
+	cGREENBG2:  "\\33[102m",
+	cYELLOWBG2: "\\33[103m",
+	cBLUEBG2:   "\\33[104m",
+	cVIOLETBG2: "\\33[105m",
+	cBEIGEBG2:  "\\33[106m",
+	cWHITEBG2:  "\\33[107m",
 }
-func (logger *Logger) WarnErrf(err error, format string, args ...any) {
-	logger.log(createEvent(WARN, fmt.Sprintf(format, args...), err))
-}
-func (logger *Logger) ErrorErrf(err error, format string, args ...any) {
-	logger.log(createEvent(ERROR, fmt.Sprintf(format, args...), err))
-}
-func (logger *Logger) FatalErrf(err error, format string, args ...any) {
-	logger.log(createEvent(FATAL, fmt.Sprintf(format, args...), err))
-}
-func (logger *Logger) IsTrace() bool { return logger.level <= TRACE }
-func (logger *Logger) IsDebug() bool { return logger.level <= DEBUG }
-func (logger *Logger) IsInfo() bool  { return logger.level <= INFO }
-func (logger *Logger) IsWarn() bool  { return logger.level <= WARN }
-func (logger *Logger) IsError() bool { return logger.level <= ERROR }
-func (logger *Logger) IsFatal() bool { return logger.level <= FATAL }
