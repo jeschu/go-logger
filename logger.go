@@ -299,9 +299,9 @@ func (logger *Logger) ErrorErrf(err error, format string, args ...any) {
 func (logger *Logger) FatalErrf(err error, format string, args ...any) {
 	logger.log(createEvent(FATAL, fmt.Sprintf(format, args...), err))
 }
-func (logger *Logger) IsTrace() bool { return logger.level >= TRACE }
-func (logger *Logger) IsDebug() bool { return logger.level >= DEBUG }
-func (logger *Logger) IsInfo() bool  { return logger.level >= INFO }
-func (logger *Logger) IsWarn() bool  { return logger.level >= WARN }
-func (logger *Logger) IsError() bool { return logger.level >= ERROR }
-func (logger *Logger) IsFatal() bool { return logger.level >= FATAL }
+func (logger *Logger) IsTrace() bool { return logger.level <= TRACE }
+func (logger *Logger) IsDebug() bool { return logger.level <= DEBUG }
+func (logger *Logger) IsInfo() bool  { return logger.level <= INFO }
+func (logger *Logger) IsWarn() bool  { return logger.level <= WARN }
+func (logger *Logger) IsError() bool { return logger.level <= ERROR }
+func (logger *Logger) IsFatal() bool { return logger.level <= FATAL }
